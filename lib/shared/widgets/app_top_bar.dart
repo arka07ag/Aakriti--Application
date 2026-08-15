@@ -40,12 +40,11 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
             filterQuality: FilterQuality.high,
           ),
           const SizedBox(width: 8),
-          // Bold blackletter Google Font — closer match to the thick,
-          // sharp-serif "AAKRITI" wordmark strokes than the thinner
-          // Maguntia style used before.
+          // Same font as the splash screen wordmark (Pirata One), so the
+          // "AAKRITI" text matches everywhere the logo appears.
           Text(
             'AAKRITI',
-            style: GoogleFonts.unifrakturCook(
+            style: GoogleFonts.pirataOne(
               fontSize: 24,
               fontWeight: FontWeight.w700,
               color: AppColors.primary,
