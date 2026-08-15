@@ -31,6 +31,8 @@ class AppSearchField extends StatelessWidget {
     this.hint = 'Search',
     this.controller,
     this.onChanged,
+    this.onSubmitted,
+    this.autofocus = false,
   });
 
   // Placeholder text shown when the field is empty.
@@ -43,6 +45,16 @@ class AppSearchField extends StatelessWidget {
   // Callback fired every time the text changes — parent screens use this to
   // filter their lists (e.g. filtering the saree inventory list).
   final ValueChanged<String>? onChanged;
+
+  // Callback fired when the person hits enter / the keyboard's search
+  // action — used to record a "recent search" without firing on every
+  // keystroke.
+  final ValueChanged<String>? onSubmitted;
+
+  // Grabs keyboard focus as soon as the field is built — used when this
+  // field appears via a reveal animation (e.g. tapping the Search tab)
+  // so the keyboard is already up and ready to type.
+  final bool autofocus;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +70,9 @@ class AppSearchField extends StatelessWidget {
       child: TextField(
         controller: controller,
         onChanged: onChanged,
+        onSubmitted: onSubmitted,
+        autofocus: autofocus,
+        textInputAction: TextInputAction.search,
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: const TextStyle(color: _SearchFieldColors.hintGrey),

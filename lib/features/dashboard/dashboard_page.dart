@@ -27,7 +27,13 @@ class _DashboardColors {
 }
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key});
+  // Owned by MainShell and shared with the bottom nav's "Search" tab —
+  // tapping that tab flips this to true, which is what actually reveals
+  // the search bar here (see _DashboardPageState). Optional so this page
+  // still works if used standalone somewhere without a shell around it.
+  final ValueNotifier<bool>? searchVisible;
+
+  const DashboardPage({super.key, this.searchVisible});
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -36,6 +42,14 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+
+  // Falls back to a locally-owned notifier when no shell provides one, so
+  // the rest of the code below never has to null-check widget.searchVisible.
+  late final ValueNotifier<bool> _searchVisible =
+      widget.searchVisible ?? ValueNotifier(false);
+
+  // In-memory only for now — most-recent-first, capped at 5, no repeats.
+  final List<String> _recentSearches = [];
 
   // ---------------------------------------------------------------------
   // MOCK DATA — TODO: replace with a real API call (GET /api/sarees/)
@@ -122,7 +136,24 @@ class _DashboardPageState extends State<DashboardPage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    // Rebuilds this page whenever the bottom nav's Search tab toggles
+    // _searchVisible — that's what actually reveals/hides the panel below.
+    _searchVisible.addListener(_onSearchVisibleChanged);
+  }
+
+  void _onSearchVisibleChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  @override
   void dispose() {
+    _searchVisible.removeListener(_onSearchVisibleChanged);
+    // Only dispose the notifier if we created it ourselves — the shell-
+    // provided one is owned (and disposed) by MainShell.
+    if (widget.searchVisible == null) _searchVisible.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -146,11 +177,16 @@ class _DashboardPageState extends State<DashboardPage> {
       body: SafeArea(
         child: Column(
           children: [
+            // Fixed — always visible, not tied to the Search tab anymore.
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: AppSearchField(
                 controller: _searchController,
                 onChanged: (value) => setState(() => _searchQuery = value),
+                onSubmitted: (value) {
+                  _commitSearch(value);
+                  _closeOverlay();
+                },
               ),
             ),
             Align(
@@ -166,35 +202,240 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
             const SizedBox(height: 12),
             Expanded(
-              child: _filteredSarees.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No sarees found',
-                        style: TextStyle(color: _DashboardColors.textGrey),
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      itemCount: _filteredSarees.length,
-                      itemBuilder: (context, index) {
-                        final saree = _filteredSarees[index];
-                        return _SareeCard(
-                          saree: saree,
-                          onTap: () => _onSareeTapped(saree),
-                          onEdit: () => _onEditSaree(saree),
-                          onAddVariant: () => _onAddVariant(saree),
-                          onDelete: () => _onDeleteSaree(saree),
-                        );
-                      },
-                    ),
+              child: Stack(
+                children: [
+                  _filteredSarees.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No sarees found',
+                            style: TextStyle(color: _DashboardColors.textGrey),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          itemCount: _filteredSarees.length,
+                          itemBuilder: (context, index) {
+                            final saree = _filteredSarees[index];
+                            return _SareeCard(
+                              saree: saree,
+                              onTap: () => _onSareeTapped(saree),
+                              onEdit: () => _onEditSaree(saree),
+                              onAddVariant: () => _onAddVariant(saree),
+                              onDelete: () => _onDeleteSaree(saree),
+                            );
+                          },
+                        ),
+                  // Only appears when the bottom nav's Search tab is
+                  // tapped: a translucent scrim over the list below the
+                  // (already-fixed) search bar, with a panel of recent
+                  // searches sitting right under it. Tapping the scrim, or
+                  // picking a recent search, closes it again.
+                  if (_searchVisible.value) _recentSearchOverlay(),
+                ],
+              ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  // Translucent scrim + panel that drops down when the bottom nav's Search
+  // tab is tapped — sits below the (always-visible) fixed search bar above
+  // it, dims the saree list behind it, and shows either recent searches
+  // (query empty) or live matching-saree suggestions as you type (query
+  // non-empty) — typing itself still happens in the fixed bar above.
+  Widget _recentSearchOverlay() {
+    final query = _searchQuery.trim();
+    final showingSuggestions = query.isNotEmpty;
+
+    return Positioned.fill(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _closeOverlay, // tap the dimmed backdrop to dismiss
+        child: Container(
+          color: Colors.black.withOpacity(0.45),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: GestureDetector(
+              onTap: () {}, // absorb taps so the panel itself doesn't close it
+              child: Container(
+                width: double.infinity,
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.5,
+                ),
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: _DashboardColors.cardWhite,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: showingSuggestions
+                        ? [
+                            const Text(
+                              'Matching Sarees',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _DashboardColors.textGrey,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            if (_filteredSarees.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 6),
+                                child: Text(
+                                  'No matching sarees',
+                                  style: TextStyle(
+                                    color: _DashboardColors.textGrey,
+                                  ),
+                                ),
+                              )
+                            else
+                              for (final s in _filteredSarees)
+                                _suggestionTile(s),
+                          ]
+                        : [
+                            const Text(
+                              'Recent Searches',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _DashboardColors.textGrey,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            if (_recentSearches.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 6),
+                                child: Text(
+                                  'No recent searches yet',
+                                  style: TextStyle(
+                                    color: _DashboardColors.textGrey,
+                                  ),
+                                ),
+                              )
+                            else
+                              for (final q in _recentSearches)
+                                _recentSearchTile(q),
+                          ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Tapping a live match: fill the field with that saree's name, log it as
+  // a completed search (same as hitting enter would), and close the
+  // overlay back to the (now-filtered) dashboard.
+  Widget _suggestionTile(Saree saree) {
+    return InkWell(
+      onTap: () {
+        _searchController.text = saree.name;
+        _searchController.selection = TextSelection.fromPosition(
+          TextPosition(offset: saree.name.length),
+        );
+        setState(() => _searchQuery = saree.name);
+        _commitSearch(saree.name);
+        _closeOverlay();
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.search,
+              size: 18,
+              color: _DashboardColors.textGrey,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    saree.name,
+                    style: const TextStyle(color: _DashboardColors.textDark),
+                  ),
+                  Text(
+                    'in ${saree.fabricName}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: _DashboardColors.goldDark,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _recentSearchTile(String query) {
+    return InkWell(
+      onTap: () {
+        _searchController.text = query;
+        _searchController.selection = TextSelection.fromPosition(
+          TextPosition(offset: query.length),
+        );
+        setState(() => _searchQuery = query);
+        _closeOverlay();
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.history,
+              size: 18,
+              color: _DashboardColors.textGrey,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                query,
+                style: const TextStyle(color: _DashboardColors.textDark),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Records a completed search (enter / keyboard search action — not every
+  // keystroke) into _recentSearches: most-recent-first, no duplicates,
+  // capped at 5 so the panel doesn't grow unbounded.
+  void _commitSearch(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return;
+    setState(() {
+      _recentSearches.remove(trimmed);
+      _recentSearches.insert(0, trimmed);
+      if (_recentSearches.length > 5) {
+        _recentSearches.removeRange(5, _recentSearches.length);
+      }
+    });
+  }
+
+  // Just hides the overlay — the fixed search bar's own text/query is left
+  // exactly as-is, since it's always on screen now and isn't "closed" by
+  // this the way it used to be.
+  void _closeOverlay() {
+    _searchVisible.value = false;
   }
 
   // Opens EditSareePage pre-filled with a blank saree (empty name/fabric,
