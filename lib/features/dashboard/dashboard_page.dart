@@ -1,0 +1,446 @@
+// ============================================================================
+// dashboard_page.dart
+// Rebuilt around the real schema: each Saree has multiple SareeVariant
+// colour options, each with its own price/stock/photos.
+//  - Card shows: cover photo (first variant's primary photo), name, fabric,
+//    total stock across all variants, and a price range if variants differ.
+//  - Mock data lives in _mockSarees below — swap for your API call later.
+// ============================================================================
+
+import 'package:flutter/material.dart';
+
+import '/shared/widgets/app_search_field.dart';
+import '/shared/widgets/app_button.dart';
+import '/shared/widgets/app_image.dart';
+import '/shared/widgets/saree.dart';
+import '../products/products_page.dart';
+import '../products/edit_saree_page.dart';
+
+class _DashboardColors {
+  static const Color goldDark = Color(0xFF9C7D1C);
+  static const Color cream = Color(0xFFFAF3E8);
+  static const Color cardWhite = Color(0xFFFFFFFF);
+  static const Color textDark = Color(0xFF2B2620);
+  static const Color textGrey = Color(0xFF8A8378);
+  static const Color border = Color(0xFFE6DCC8);
+}
+
+class DashboardPage extends StatefulWidget {
+  const DashboardPage({super.key});
+
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  // ---------------------------------------------------------------------
+  // MOCK DATA — TODO: replace with a real API call (GET /api/sarees/)
+  // when the backend is ready. The shape here matches Saree.fromJson, so
+  // swapping in real data later is a one-line change in a FutureBuilder.
+  // ---------------------------------------------------------------------
+  final List<Saree> _mockSarees = [
+    Saree(
+      id: 'saree_1',
+      name: 'Banarasi Silk',
+      fabricName: 'Silk - Banarasi',
+      description:
+          'A handwoven Banarasi silk saree with a rich gold zari border and '
+          'traditional motifs. Comes with a matching unstitched blouse piece.',
+      occasions: const ['Wedding', 'Festive', 'Party'],
+      occasionImageUrl:
+          'https://via.placeholder.com/600x300.png?text=Wedding+Occasion',
+      variants: [
+        SareeVariant(
+          id: 'variant_1a',
+          colorName: 'Maroon',
+          colorCode: '#800000',
+          price: 4999,
+          quantity: 10,
+          images: const [
+            VariantImage(
+              source:
+                  'https://cdn.pixabay.com/photo/2023/12/29/10/50/banarasi-saree-8475975_1280.jpg',
+              isPrimary: true,
+            ),
+            VariantImage(
+              source: 'https://via.placeholder.com/600x800.png?text=Maroon+2',
+            ),
+          ],
+        ),
+        SareeVariant(
+          id: 'variant_1b',
+          colorName: 'Gold',
+          colorCode: '#C9A227',
+          price: 5299,
+          quantity: 4,
+          images: const [
+            VariantImage(
+              source: 'https://via.placeholder.com/600x800.png?text=Gold+1',
+              isPrimary: true,
+            ),
+          ],
+        ),
+        SareeVariant(
+          id: 'variant_1c',
+          colorName: 'Pink',
+          colorCode: '#D6336C',
+          price: 4999,
+          quantity: 0, // out of stock in this colour
+          images: const [
+            VariantImage(
+              source: 'https://via.placeholder.com/600x800.png?text=Pink+1',
+              isPrimary: true,
+            ),
+          ],
+        ),
+      ],
+    ),
+    Saree(
+      id: 'saree_2',
+      name: 'Kanjivaram',
+      fabricName: 'Silk - Kanjivaram',
+      variants: const [
+        SareeVariant(
+          id: 'variant_2a',
+          colorName: 'Green',
+          colorCode: '#2E7D32',
+          price: 6499,
+          quantity: 12,
+          images: [
+            VariantImage(
+              source: 'https://via.placeholder.com/150',
+              isPrimary: true,
+            ),
+          ],
+        ),
+      ],
+    ),
+  ];
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<Saree> get _filteredSarees {
+    if (_searchQuery.trim().isEmpty) return _mockSarees;
+    final query = _searchQuery.toLowerCase();
+    return _mockSarees
+        .where(
+          (saree) =>
+              saree.name.toLowerCase().contains(query) ||
+              saree.fabricName.toLowerCase().contains(query),
+        )
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _DashboardColors.cream,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: AppSearchField(
+                controller: _searchController,
+                onChanged: (value) => setState(() => _searchQuery = value),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FractionallySizedBox(
+                widthFactor: 0.5,
+                child: AppButton(
+                  label: 'ADD NEW SAREE',
+                  onPressed: _onAddSaree,
+                  fullWidth: false,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: _filteredSarees.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No sarees found',
+                        style: TextStyle(color: _DashboardColors.textGrey),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      itemCount: _filteredSarees.length,
+                      itemBuilder: (context, index) {
+                        final saree = _filteredSarees[index];
+                        return _SareeCard(
+                          saree: saree,
+                          onTap: () => _onSareeTapped(saree),
+                          onEdit: () => _onEditSaree(saree),
+                          onAddVariant: () => _onAddVariant(saree),
+                          onDelete: () => _onDeleteSaree(saree),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _onAddSaree() {
+    debugPrint('Add New Saree tapped — hook up navigation here.');
+  }
+
+  void _onSareeTapped(Saree saree) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => ProductsPage(saree: saree)),
+    );
+  }
+
+  // Opens EditSareePage pre-filled with this saree (name, fabric,
+  // description, occasions, and every colour variant). On save, replaces
+  // the matching saree in _mockSarees by id.
+  Future<void> _onEditSaree(Saree saree) async {
+    final updated = await Navigator.push<Saree>(
+      context,
+      MaterialPageRoute(builder: (context) => EditSareePage(saree: saree)),
+    );
+
+    if (updated == null) return;
+
+    setState(() {
+      final index = _mockSarees.indexWhere((s) => s.id == updated.id);
+      if (index != -1) _mockSarees[index] = updated;
+    });
+  }
+
+  // TODO: shortcut into EditSareePage focused on adding just one new
+  // variant, rather than opening the full editor. For now this opens the
+  // same full editor, where "Add Variant" is one tap away.
+  void _onAddVariant(Saree saree) {
+    _onEditSaree(saree);
+  }
+
+  void _onDeleteSaree(Saree saree) {
+    debugPrint('Delete tapped for ${saree.name}');
+  }
+}
+
+// ----------------------------------------------------------------------------
+// SAREE CARD WIDGET
+// ----------------------------------------------------------------------------
+class _SareeCard extends StatelessWidget {
+  final Saree saree;
+  final VoidCallback? onTap;
+  final VoidCallback? onEdit;
+  final VoidCallback? onAddVariant;
+  final VoidCallback? onDelete;
+
+  const _SareeCard({
+    required this.saree,
+    this.onTap,
+    this.onEdit,
+    this.onAddVariant,
+    this.onDelete,
+  });
+
+  String get _priceLabel {
+    if (saree.variants.isEmpty) return '\u2014';
+    if (saree.minPrice == saree.maxPrice) {
+      return '\u20B9${saree.minPrice.toStringAsFixed(0)}';
+    }
+    return '\u20B9${saree.minPrice.toStringAsFixed(0)}\u2013${saree.maxPrice.toStringAsFixed(0)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _DashboardColors.cardWhite,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _DashboardColors.border),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AppImage(
+                source: saree.coverImageSource,
+                bytes: saree.coverImage?.bytes,
+                width: 80,
+                height: 90,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Saree Name',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _DashboardColors.textGrey,
+                      ),
+                    ),
+                    Text(
+                      saree.name,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: _DashboardColors.textDark,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Fabric',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _DashboardColors.textGrey,
+                      ),
+                    ),
+                    Text(
+                      saree.fabricName,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: _DashboardColors.textDark,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _priceLabel,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _DashboardColors.goldDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const Text(
+                    'STOCK',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: _DashboardColors.textGrey,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    saree.totalStock.toString(),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: _DashboardColors.goldDark,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${saree.variants.length} colour${saree.variants.length == 1 ? '' : 's'}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: _DashboardColors.textGrey,
+                    ),
+                  ),
+                ],
+              ),
+              PopupMenuButton<String>(
+                icon: const Icon(
+                  Icons.more_vert,
+                  color: _DashboardColors.textGrey,
+                ),
+                onSelected: (value) {
+                  switch (value) {
+                    case 'edit':
+                      onEdit?.call();
+                      break;
+                    case 'add_variant':
+                      onAddVariant?.call();
+                      break;
+                    case 'delete':
+                      onDelete?.call();
+                      break;
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.edit_outlined,
+                          size: 20,
+                          color: _DashboardColors.textDark,
+                        ),
+                        SizedBox(width: 12),
+                        Text('Edit Saree'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'add_variant',
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.add_circle_outline,
+                          size: 20,
+                          color: _DashboardColors.textDark,
+                        ),
+                        SizedBox(width: 12),
+                        Text('Add Variant'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.delete_outline,
+                          size: 20,
+                          color: Colors.redAccent,
+                        ),
+                        SizedBox(width: 12),
+                        Text(
+                          'Delete',
+                          style: TextStyle(color: Colors.redAccent),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
