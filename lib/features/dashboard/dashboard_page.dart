@@ -13,6 +13,7 @@ import '/shared/widgets/app_search_field.dart';
 import '/shared/widgets/app_button.dart';
 import '/shared/widgets/app_image.dart';
 import '/shared/widgets/saree.dart';
+import '/shared/widgets/swatch_color.dart';
 import '../products/products_page.dart';
 import '../products/edit_saree_page.dart';
 
@@ -231,8 +232,42 @@ class _DashboardPageState extends State<DashboardPage> {
     _onEditSaree(saree);
   }
 
-  void _onDeleteSaree(Saree saree) {
-    debugPrint('Delete tapped for ${saree.name}');
+// CHANGED: was a debugPrint-only stub — nothing was actually deleted.
+  // Now: confirms first (deleting is permanent and easy to hit by
+  // accident from a popup menu), then removes ONLY this oane saree by its
+  // id. Every other saree in _mockSarees is untouched.
+  Future<void> _onDeleteSaree(Saree saree) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete this saree?'),
+        content: Text(
+          '"${saree.name}" and all its colour variants will be removed. '
+          'This can\'t be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      // Remove by id, so only the exact saree that was tapped is removed —
+      // never the whole list.
+      _mockSarees.removeWhere((s) => s.id == saree.id);
+    });
   }
 }
 
@@ -285,162 +320,234 @@ class _SareeCard extends StatelessWidget {
               ),
             ],
           ),
-          child: Row(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AppImage(
-                source: saree.coverImageSource,
-                bytes: saree.coverImage?.bytes,
-                width: 80,
-                height: 90,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Saree Name',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: _DashboardColors.textGrey,
-                      ),
-                    ),
-                    Text(
-                      saree.name,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: _DashboardColors.textDark,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Fabric',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: _DashboardColors.textGrey,
-                      ),
-                    ),
-                    Text(
-                      saree.fabricName,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: _DashboardColors.textDark,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _priceLabel,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: _DashboardColors.goldDark,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'STOCK',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: _DashboardColors.textGrey,
-                    ),
+                  AppImage(
+                    source: saree.coverImageSource,
+                    bytes: saree.coverImage?.bytes,
+                    width: 80,
+                    height: 90,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    saree.totalStock.toString(),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: _DashboardColors.goldDark,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${saree.variants.length} colour${saree.variants.length == 1 ? '' : 's'}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: _DashboardColors.textGrey,
-                    ),
-                  ),
-                ],
-              ),
-              PopupMenuButton<String>(
-                icon: const Icon(
-                  Icons.more_vert,
-                  color: _DashboardColors.textGrey,
-                ),
-                onSelected: (value) {
-                  switch (value) {
-                    case 'edit':
-                      onEdit?.call();
-                      break;
-                    case 'add_variant':
-                      onAddVariant?.call();
-                      break;
-                    case 'delete':
-                      onDelete?.call();
-                      break;
-                  }
-                },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.edit_outlined,
-                          size: 20,
-                          color: _DashboardColors.textDark,
+                        const Text(
+                          'Saree Name',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: _DashboardColors.textGrey,
+                          ),
                         ),
-                        SizedBox(width: 12),
-                        Text('Edit Saree'),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'add_variant',
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.add_circle_outline,
-                          size: 20,
-                          color: _DashboardColors.textDark,
-                        ),
-                        SizedBox(width: 12),
-                        Text('Add Variant'),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.delete_outline,
-                          size: 20,
-                          color: Colors.redAccent,
-                        ),
-                        SizedBox(width: 12),
                         Text(
-                          'Delete',
-                          style: TextStyle(color: Colors.redAccent),
+                          saree.name,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: _DashboardColors.textDark,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Fabric',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: _DashboardColors.textGrey,
+                          ),
+                        ),
+                        Text(
+                          saree.fabricName,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: _DashboardColors.textDark,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _priceLabel,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: _DashboardColors.goldDark,
+                          ),
                         ),
                       ],
                     ),
                   ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const Text(
+                        'STOCK',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: _DashboardColors.textGrey,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        saree.totalStock.toString(),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: _DashboardColors.goldDark,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${saree.variants.length} colour${saree.variants.length == 1 ? '' : 's'}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: _DashboardColors.textGrey,
+                        ),
+                      ),
+                    ],
+                  ),
+                  PopupMenuButton<String>(
+                    icon: const Icon(
+                      Icons.more_vert,
+                      color: _DashboardColors.textGrey,
+                    ),
+                    onSelected: (value) {
+                      switch (value) {
+                        case 'edit':
+                          onEdit?.call();
+                          break;
+                        case 'add_variant':
+                          onAddVariant?.call();
+                          break;
+                        case 'delete':
+                          onDelete?.call();
+                          break;
+                      }
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.edit_outlined,
+                              size: 20,
+                              color: _DashboardColors.textDark,
+                            ),
+                            SizedBox(width: 12),
+                            Text('Edit Saree'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'add_variant',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.add_circle_outline,
+                              size: 20,
+                              color: _DashboardColors.textDark,
+                            ),
+                            SizedBox(width: 12),
+                            Text('Add Variant'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.delete_outline,
+                              size: 20,
+                              color: Colors.redAccent,
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              'Delete',
+                              style: TextStyle(color: Colors.redAccent),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
+              if (saree.variants.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                _ColourStockBreakdown(saree: saree),
+              ],
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+// ----------------------------------------------------------------------------
+// COLOUR STOCK BREAKDOWN — small pill per colour showing its own stock, so
+// you can see at a glance which colour is running low without opening the
+// saree.
+// ----------------------------------------------------------------------------
+class _ColourStockBreakdown extends StatelessWidget {
+  final Saree saree;
+
+  const _ColourStockBreakdown({required this.saree});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: saree.variants.map((variant) {
+        final outOfStock = variant.quantity == 0;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: _DashboardColors.cream,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _DashboardColors.border),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: swatchColorFor(variant.colorCode, variant.colorName),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _DashboardColors.border),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                variant.colorName,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: _DashboardColors.textDark,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                outOfStock ? 'Out of stock' : '${variant.quantity}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: outOfStock
+                      ? Colors.redAccent
+                      : _DashboardColors.goldDark,
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 }

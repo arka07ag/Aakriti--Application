@@ -7,6 +7,7 @@
 
 import 'package:flutter/material.dart';
 
+import '/shared/widgets/swatch_color.dart';
 import '/shared/widgets/app_image.dart';
 import '/shared/widgets/saree.dart';
 
@@ -19,35 +20,6 @@ class _ProductColors {
   static const Color border = Color(0xFFE6DCC8);
   static const Color inStock = Color(0xFF3F8A4C);
   static const Color outOfStock = Color(0xFFC0392B);
-}
-
-Color _swatchFor(String colorCode, String colorName) {
-  if (colorCode.trim().isNotEmpty) {
-    final hex = colorCode.trim().replaceFirst('#', '');
-    final full = hex.length == 6 ? 'FF$hex' : hex;
-    final parsed = int.tryParse(full, radix: 16);
-    if (parsed != null) return Color(parsed);
-  }
-  const map = {
-    'red': Colors.red,
-    'pink': Color(0xFFD6336C),
-    'maroon': Color(0xFF800000),
-    'purple': Colors.purple,
-    'blue': Colors.blue,
-    'navy': Color(0xFF1B1F5C),
-    'teal': Colors.teal,
-    'green': Colors.green,
-    'yellow': Colors.amber,
-    'gold': Color(0xFFC9A227),
-    'orange': Colors.deepOrange,
-    'black': Colors.black,
-    'white': Colors.white,
-    'cream': Color(0xFFFAF3E8),
-    'silver': Color(0xFFC0C0C0),
-    'grey': Colors.grey,
-    'gray': Colors.grey,
-  };
-  return map[colorName.trim().toLowerCase()] ?? Colors.grey.shade400;
 }
 
 class ProductsPage extends StatefulWidget {
@@ -329,7 +301,7 @@ class _ProductsPageState extends State<ProductsPage> {
               width: 14,
               height: 14,
               decoration: BoxDecoration(
-                color: _swatchFor(variant.colorCode, variant.colorName),
+                color: swatchColorFor(variant.colorCode, variant.colorName),
                 shape: BoxShape.circle,
                 border: Border.all(color: _ProductColors.border),
               ),

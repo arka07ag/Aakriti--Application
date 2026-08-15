@@ -43,7 +43,6 @@ class _BottomNav extends StatelessWidget {
 
   static const List<(IconData, String)> _items = [
     (Icons.grid_view_rounded, 'Dashboard'),
-    (Icons.inventory_2_outlined, 'Products'),
     (Icons.shopping_bag_outlined, 'Orders'),
     (Icons.settings_outlined, 'Settings'),
   ];
