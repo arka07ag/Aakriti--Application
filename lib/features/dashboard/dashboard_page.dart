@@ -197,8 +197,32 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  void _onAddSaree() {
-    debugPrint('Add New Saree tapped — hook up navigation here.');
+  // Opens EditSareePage pre-filled with a blank saree (empty name/fabric,
+  // one blank colour variant to fill in — EditSareePage already does this
+  // whenever it's handed a saree with no variants). On save, the new
+  // saree is inserted at the top of _mockSarees — this is the in-memory
+  // "database" for now; once a real backend endpoint exists, swap the
+  // setState insert below for the POST /api/sarees/ call and use the
+  // saree the server returns instead.
+  Future<void> _onAddSaree() async {
+    final blankSaree = Saree(
+      id: 'local_${DateTime.now().millisecondsSinceEpoch}',
+      name: '',
+      fabricName: '',
+    );
+
+    final created = await Navigator.push<Saree>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditSareePage(saree: blankSaree, isNew: true),
+      ),
+    );
+
+    if (created == null) return;
+
+    setState(() {
+      _mockSarees.insert(0, created);
+    });
   }
 
   void _onSareeTapped(Saree saree) {
@@ -232,7 +256,7 @@ class _DashboardPageState extends State<DashboardPage> {
     _onEditSaree(saree);
   }
 
-// CHANGED: was a debugPrint-only stub — nothing was actually deleted.
+  // CHANGED: was a debugPrint-only stub — nothing was actually deleted.
   // Now: confirms first (deleting is permanent and easy to hit by
   // accident from a popup menu), then removes ONLY this oane saree by its
   // id. Every other saree in _mockSarees is untouched.
@@ -428,34 +452,11 @@ class _SareeCard extends StatelessWidget {
                       }
                     },
                     itemBuilder: (context) => const [
-                      PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.edit_outlined,
-                              size: 20,
-                              color: _DashboardColors.textDark,
-                            ),
-                            SizedBox(width: 12),
-                            Text('Edit Saree'),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'add_variant',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.add_circle_outline,
-                              size: 20,
-                              color: _DashboardColors.textDark,
-                            ),
-                            SizedBox(width: 12),
-                            Text('Add Variant'),
-                          ],
-                        ),
-                      ),
+                      // "Edit Saree" and "Add Variant" menu buttons removed
+                      // per request — the underlying handlers (_onEditSaree,
+                      // _onAddVariant, and the 'edit'/'add_variant' cases
+                      // below in onSelected) are left in place untouched in
+                      // case these buttons come back later.
                       PopupMenuItem(
                         value: 'delete',
                         child: Row(

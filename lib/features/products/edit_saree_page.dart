@@ -35,8 +35,12 @@ class _EditColors {
 
 class EditSareePage extends StatefulWidget {
   final Saree saree;
+  // True when this page was opened from "Add New Saree" (blank starting
+  // saree) rather than editing an existing one — only changes the title/
+  // button copy, the save logic underneath is identical either way.
+  final bool isNew;
 
-  const EditSareePage({super.key, required this.saree});
+  const EditSareePage({super.key, required this.saree, this.isNew = false});
 
   @override
   State<EditSareePage> createState() => _EditSareePageState();
@@ -63,12 +67,20 @@ class _VariantForm {
     required this.images,
   }) : colorNameController = TextEditingController(text: colorName),
        colorCodeController = TextEditingController(text: colorCode),
+       // Leave the field blank (so the "Price ₹" / "Stock" hint shows
+       // through) instead of literally showing "0" — toVariant() already
+       // falls back to 0 on save if nothing was typed, so behaviour is
+       // unchanged either way.
        priceController = TextEditingController(
-         text: price == price.roundToDouble()
-             ? price.toStringAsFixed(0)
-             : price.toString(),
+         text: price == 0
+             ? ''
+             : (price == price.roundToDouble()
+                   ? price.toStringAsFixed(0)
+                   : price.toString()),
        ),
-       quantityController = TextEditingController(text: quantity.toString());
+       quantityController = TextEditingController(
+         text: quantity == 0 ? '' : quantity.toString(),
+       );
 
   factory _VariantForm.fromVariant(SareeVariant v) => _VariantForm(
     id: v.id,
@@ -115,7 +127,8 @@ class _EditSareePageState extends State<EditSareePage> {
   late final TextEditingController _nameController;
   late final TextEditingController _fabricController;
   late final TextEditingController _descriptionController;
-  late final TextEditingController _occasionImageDummy; // unused, kept for symmetry
+  late final TextEditingController
+  _occasionImageDummy; // unused, kept for symmetry
   late String _occasionImage;
   Uint8List? _occasionImageBytes;
 
@@ -254,8 +267,13 @@ class _EditSareePageState extends State<EditSareePage> {
       variants: _variants.map((v) => v.toVariant()).toList(),
     );
 
-    // TODO: persist to backend here (upload new local photos, POST/PUT
-    // variants, PUT the saree) before/alongside popping.
+    // TODO: once the Django API URL/endpoints are wired up — replace this
+    // local pop with a real call: POST /api/sarees/ when widget.isNew is
+    // true (create), PUT /api/sarees/<id>/ when it's false (update), plus
+    // uploading any local (not-yet-uploaded) variant photos first. Until
+    // then this "saves" by handing the new/updated Saree back to the
+    // dashboard, which keeps it in _mockSarees so Add New Saree is fully
+    // usable as a demo right now.
     Navigator.pop(context, updated);
   }
 
@@ -267,9 +285,9 @@ class _EditSareePageState extends State<EditSareePage> {
         backgroundColor: _EditColors.cream,
         elevation: 0,
         iconTheme: const IconThemeData(color: _EditColors.textDark),
-        title: const Text(
-          'Edit Saree',
-          style: TextStyle(
+        title: Text(
+          widget.isNew ? 'Add New Saree' : 'Edit Saree',
+          style: const TextStyle(
             color: _EditColors.textDark,
             fontWeight: FontWeight.bold,
             fontSize: 18,
@@ -325,17 +343,13 @@ class _EditSareePageState extends State<EditSareePage> {
                   onAdd: (v) => setState(() => _occasions.add(v)),
                   onRemove: (v) => setState(() => _occasions.remove(v)),
                 ),
-                const SizedBox(height: 18),
-
-                _sectionLabel('Occasion Photo'),
-                const SizedBox(height: 4),
-                Text(
-                  'A single mood/lifestyle photo shown under Occasions on the detail page.',
-                  style: TextStyle(fontSize: 12, color: _EditColors.textGrey),
-                ),
-                const SizedBox(height: 8),
-                _occasionPhotoPicker(),
                 const SizedBox(height: 28),
+                // Occasion Photo section removed per request — only the
+                // Occasions tag list stays. _occasionPhotoPicker() and the
+                // _occasionImage/_occasionImageBytes state are left in
+                // place untouched (occasionImageUrl just stays whatever it
+                // started as, unset for a new saree) in case the photo
+                // picker comes back later.
 
                 // ---- Colour variants ----
                 Row(
@@ -367,7 +381,10 @@ class _EditSareePageState extends State<EditSareePage> {
                 ],
 
                 const SizedBox(height: 18),
-                AppButton(label: 'SAVE CHANGES', onPressed: _onSave),
+                AppButton(
+                  label: widget.isNew ? 'ADD SAREE' : 'SAVE CHANGES',
+                  onPressed: _onSave,
+                ),
                 const SizedBox(height: 10),
                 AppButton(
                   label: 'CANCEL',
@@ -391,13 +408,17 @@ class _EditSareePageState extends State<EditSareePage> {
   }
 
   String? _intValidator(String? value) {
-    if (value == null || value.trim().isEmpty) return 'Required';
+    // Empty is fine — left blank + Save means "0" (see toVariant()'s
+    // int.tryParse(...) ?? 0), so don't force the person to type a 0.
+    if (value == null || value.trim().isEmpty) return null;
     if (int.tryParse(value.trim()) == null) return 'Whole number';
     return null;
   }
 
   String? _priceValidator(String? value) {
-    if (value == null || value.trim().isEmpty) return 'Required';
+    // Empty is fine — left blank + Save means "0" (see toVariant()'s
+    // double.tryParse(...) ?? 0), so don't force the person to type a 0.
+    if (value == null || value.trim().isEmpty) return null;
     if (double.tryParse(value.trim()) == null) return 'Invalid price';
     return null;
   }
@@ -479,7 +500,9 @@ class _EditSareePageState extends State<EditSareePage> {
                 child: ValueListenableBuilder<TextEditingValue>(
                   valueListenable: variant.colorNameController,
                   builder: (context, value, _) => Text(
-                    value.text.trim().isEmpty ? 'New Colour' : value.text.trim(),
+                    value.text.trim().isEmpty
+                        ? 'New Colour'
+                        : value.text.trim(),
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -713,83 +736,83 @@ class _EditSareePageState extends State<EditSareePage> {
     );
   }
 
-  // ---------------------------------------------------------------------
-  // OCCASION PHOTO (saree-level, single image)
-  // ---------------------------------------------------------------------
-  Widget _occasionPhotoPicker() {
-    if (_occasionImage.trim().isEmpty) {
-      return GestureDetector(
-        onTap: () => _pickImage(
-          (path, bytes) => setState(() {
-            _occasionImage = path;
-            _occasionImageBytes = bytes;
-          }),
-        ),
-        child: Container(
-          width: double.infinity,
-          height: 90,
-          decoration: BoxDecoration(
-            color: _EditColors.cardWhite,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _EditColors.border),
-          ),
-          alignment: Alignment.center,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.add_a_photo_outlined,
-                color: _EditColors.goldDark,
-                size: 22,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Add Occasion Photo (optional)',
-                style: TextStyle(fontSize: 12, color: _EditColors.textGrey),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-    return Stack(
-      alignment: Alignment.topRight,
-      children: [
-        GestureDetector(
-          onTap: () => _pickImage(
-            (path, bytes) => setState(() {
-              _occasionImage = path;
-              _occasionImageBytes = bytes;
-            }),
-          ),
-          child: AppImage(
-            source: _occasionImage,
-            bytes: _occasionImageBytes,
-            width: double.infinity,
-            height: 140,
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(6),
-          child: GestureDetector(
-            onTap: () => setState(() {
-              _occasionImage = '';
-              _occasionImageBytes = null;
-            }),
-            child: Container(
-              padding: const EdgeInsets.all(3),
-              decoration: const BoxDecoration(
-                color: Colors.black54,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.close, size: 14, color: Colors.white),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  // // ---------------------------------------------------------------------
+  // // OCCASION PHOTO (saree-level, single image)
+  // // ---------------------------------------------------------------------
+  // Widget _occasionPhotoPicker() {
+  //   if (_occasionImage.trim().isEmpty) {
+  //     return GestureDetector(
+  //       onTap: () => _pickImage(
+  //         (path, bytes) => setState(() {
+  //           _occasionImage = path;
+  //           _occasionImageBytes = bytes;
+  //         }),
+  //       ),
+  //       child: Container(
+  //         width: double.infinity,
+  //         height: 90,
+  //         decoration: BoxDecoration(
+  //           color: _EditColors.cardWhite,
+  //           borderRadius: BorderRadius.circular(14),
+  //           border: Border.all(color: _EditColors.border),
+  //         ),
+  //         alignment: Alignment.center,
+  //         child: Column(
+  //           mainAxisSize: MainAxisSize.min,
+  //           children: [
+  //             const Icon(
+  //               Icons.add_a_photo_outlined,
+  //               color: _EditColors.goldDark,
+  //               size: 22,
+  //             ),
+  //             const SizedBox(height: 6),
+  //             Text(
+  //               'Add Occasion Photo (optional)',
+  //               style: TextStyle(fontSize: 12, color: _EditColors.textGrey),
+  //             ),
+  //           ],
+  //         ),
+  //       ),
+  //     );
+  //   }
+  //   return Stack(
+  //     alignment: Alignment.topRight,
+  //     children: [
+  //       GestureDetector(
+  //         onTap: () => _pickImage(
+  //           (path, bytes) => setState(() {
+  //             _occasionImage = path;
+  //             _occasionImageBytes = bytes;
+  //           }),
+  //         ),
+  //         child: AppImage(
+  //           source: _occasionImage,
+  //           bytes: _occasionImageBytes,
+  //           width: double.infinity,
+  //           height: 140,
+  //           borderRadius: BorderRadius.circular(14),
+  //         ),
+  //       ),
+  //       Padding(
+  //         padding: const EdgeInsets.all(6),
+  //         child: GestureDetector(
+  //           onTap: () => setState(() {
+  //             _occasionImage = '';
+  //             _occasionImageBytes = null;
+  //           }),
+  //           child: Container(
+  //             padding: const EdgeInsets.all(3),
+  //             decoration: const BoxDecoration(
+  //               color: Colors.black54,
+  //               shape: BoxShape.circle,
+  //             ),
+  //             child: const Icon(Icons.close, size: 14, color: Colors.white),
+  //           ),
+  //         ),
+  //       ),
+  //     ],
+  //   );
+  // }
 
   // ---------------------------------------------------------------------
   // OCCASIONS CHIP LIST (saree-level)
