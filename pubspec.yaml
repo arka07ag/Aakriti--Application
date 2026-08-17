@@ -40,6 +40,10 @@ dependencies:
   # For talking to your website's backend API (fetching/updating sarees,
   # uploading photos) once ApiConfig.useLiveApi is switched on.
   http: ^1.2.2
+  # Pushes a real system/device notification (Android notification shade /
+  # iOS banner) when a saree colour's stock hits zero. See
+  # lib/shared/services/stock_notification_service.dart.
+  flutter_local_notifications: ^18.0.1
 
 dev_dependencies:
   flutter_test:

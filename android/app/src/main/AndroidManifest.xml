@@ -3,6 +3,9 @@
          Gallery/file picking uses the system photo picker and needs no
          permission entry on modern Android. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Required on Android 13+ to show the out-of-stock notification in
+         the system tray (see StockNotificationService). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:label="aakriti"
         android:name="${applicationName}"

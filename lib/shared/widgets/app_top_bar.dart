@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../app/app_colors.dart';
+import '../services/stock_notification_center.dart';
 
 class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   const AppTopBar({super.key, this.title = 'Good morning, Admin'});
@@ -13,6 +14,19 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+
+  void _showAlertsPanel(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const _StockAlertsSheet(),
+    ).whenComplete(() {
+      // Mark everything read once the panel is dismissed, so the badge
+      // clears after the user has actually seen the list.
+      StockNotificationCenter.instance.markAllRead();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,26 +68,22 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
         ],
       ),
       actions: [
-        Stack(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.notifications_outlined),
-              color: AppColors.neutral,
-              onPressed: () {},
-            ),
-            Positioned(
-              right: 10,
-              top: 12,
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: AppColors.danger,
-                  shape: BoxShape.circle,
+        ListenableBuilder(
+          listenable: StockNotificationCenter.instance,
+          builder: (context, _) {
+            final hasUnread = StockNotificationCenter.instance.unreadCount > 0;
+            return Stack(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.notifications_outlined),
+                  color: AppColors.neutral,
+                  onPressed: () => _showAlertsPanel(context),
                 ),
-              ),
-            ),
-          ],
+                if (hasUnread)
+                  const Positioned(right: 10, top: 12, child: _UnreadDot()),
+              ],
+            );
+          },
         ),
         Padding(
           padding: const EdgeInsets.only(right: 12),
@@ -84,6 +94,119 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// Small red dot shown on the bell icon while there's at least one unread
+// out-of-stock alert. Split out just so AppTopBar.build stays readable.
+class _UnreadDot extends StatelessWidget {
+  const _UnreadDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 8,
+      height: 8,
+      decoration: const BoxDecoration(
+        color: AppColors.danger,
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
+// ----------------------------------------------------------------------------
+// The panel that drops down from the bell icon, listing every out-of-stock
+// alert (most recent first): "{Saree} ({Colour}) is out of stock." plus how
+// long ago it happened.
+// ----------------------------------------------------------------------------
+class _StockAlertsSheet extends StatelessWidget {
+  const _StockAlertsSheet();
+
+  String _timeAgo(DateTime time) {
+    final diff = DateTime.now().difference(time);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: ListenableBuilder(
+        listenable: StockNotificationCenter.instance,
+        builder: (context, _) {
+          final alerts = StockNotificationCenter.instance.alerts;
+          return Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.6,
+            ),
+            margin: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Stock Alerts',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      if (alerts.isNotEmpty)
+                        TextButton(
+                          onPressed: () =>
+                              StockNotificationCenter.instance.clear(),
+                          child: const Text('Clear all'),
+                        ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Flexible(
+                  child: alerts.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 32),
+                          child: Text(
+                            'No stock alerts yet',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        )
+                      : ListView.separated(
+                          shrinkWrap: true,
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          itemCount: alerts.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final alert = alerts[index];
+                            return ListTile(
+                              leading: const Icon(
+                                Icons.error_outline,
+                                color: AppColors.danger,
+                              ),
+                              title: Text(alert.message),
+                              subtitle: Text(_timeAgo(alert.time)),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

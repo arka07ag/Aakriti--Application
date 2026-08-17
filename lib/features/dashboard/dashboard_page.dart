@@ -14,6 +14,7 @@ import '/shared/widgets/app_button.dart';
 import '/shared/widgets/app_image.dart';
 import '/shared/widgets/saree.dart';
 import '/shared/widgets/swatch_color.dart';
+import '/shared/services/stock_notification_center.dart';
 import '../products/products_page.dart';
 import '../products/edit_saree_page.dart';
 
@@ -141,6 +142,11 @@ class _DashboardPageState extends State<DashboardPage> {
     // Rebuilds this page whenever the bottom nav's Search tab toggles
     // _searchVisible — that's what actually reveals/hides the panel below.
     _searchVisible.addListener(_onSearchVisibleChanged);
+    // Scans the initial saree list for any colour already at 0 stock (e.g.
+    // "Pink" below) and raises the bell alert + device notification for it.
+    // TODO: once _mockSarees is replaced by a real API call, call this
+    // again inside the same place the fetched list is set.
+    StockNotificationCenter.instance.syncFromSarees(_mockSarees);
   }
 
   void _onSearchVisibleChanged() {
@@ -464,6 +470,7 @@ class _DashboardPageState extends State<DashboardPage> {
     setState(() {
       _mockSarees.insert(0, created);
     });
+    StockNotificationCenter.instance.syncFromSarees(_mockSarees);
   }
 
   void _onSareeTapped(Saree saree) {
@@ -488,6 +495,7 @@ class _DashboardPageState extends State<DashboardPage> {
       final index = _mockSarees.indexWhere((s) => s.id == updated.id);
       if (index != -1) _mockSarees[index] = updated;
     });
+    StockNotificationCenter.instance.syncFromSarees(_mockSarees);
   }
 
   // TODO: shortcut into EditSareePage focused on adding just one new
@@ -533,6 +541,7 @@ class _DashboardPageState extends State<DashboardPage> {
       // never the whole list.
       _mockSarees.removeWhere((s) => s.id == saree.id);
     });
+    StockNotificationCenter.instance.syncFromSarees(_mockSarees);
   }
 }
 
