@@ -14,7 +14,7 @@ import '/shared/widgets/app_button.dart';
 import '/shared/widgets/app_image.dart';
 import '/shared/widgets/saree.dart';
 import '/shared/widgets/swatch_color.dart';
-import '/shared/services/stock_notification_center.dart';
+import '/shared/data/saree_repository.dart';
 import '../products/products_page.dart';
 import '../products/edit_saree_page.dart';
 
@@ -53,88 +53,14 @@ class _DashboardPageState extends State<DashboardPage> {
   final List<String> _recentSearches = [];
 
   // ---------------------------------------------------------------------
-  // MOCK DATA — TODO: replace with a real API call (GET /api/sarees/)
-  // when the backend is ready. The shape here matches Saree.fromJson, so
-  // swapping in real data later is a one-line change in a FutureBuilder.
+  // DATA SOURCE — sarees now live in SareeRepository (lib/shared/data/
+  // saree_repository.dart) instead of a private list here, so Settings
+  // can read the same data (e.g. to show which sarees belong to a Fabric
+  // Collection). This getter keeps every `_mockSarees` reference below
+  // working unchanged. TODO: SareeRepository itself is where the real
+  // GET /api/sarees/ call will eventually live.
   // ---------------------------------------------------------------------
-  final List<Saree> _mockSarees = [
-    Saree(
-      id: 'saree_1',
-      name: 'Banarasi Silk',
-      fabricName: 'Silk - Banarasi',
-      description:
-          'A handwoven Banarasi silk saree with a rich gold zari border and '
-          'traditional motifs. Comes with a matching unstitched blouse piece.',
-      occasions: const ['Wedding', 'Festive', 'Party'],
-      occasionImageUrl:
-          'https://via.placeholder.com/600x300.png?text=Wedding+Occasion',
-      variants: [
-        SareeVariant(
-          id: 'variant_1a',
-          colorName: 'Maroon',
-          colorCode: '#800000',
-          price: 4999,
-          quantity: 10,
-          images: const [
-            VariantImage(
-              source:
-                  'https://cdn.pixabay.com/photo/2023/12/29/10/50/banarasi-saree-8475975_1280.jpg',
-              isPrimary: true,
-            ),
-            VariantImage(
-              source: 'https://via.placeholder.com/600x800.png?text=Maroon+2',
-            ),
-          ],
-        ),
-        SareeVariant(
-          id: 'variant_1b',
-          colorName: 'Gold',
-          colorCode: '#C9A227',
-          price: 5299,
-          quantity: 4,
-          images: const [
-            VariantImage(
-              source: 'https://via.placeholder.com/600x800.png?text=Gold+1',
-              isPrimary: true,
-            ),
-          ],
-        ),
-        SareeVariant(
-          id: 'variant_1c',
-          colorName: 'Pink',
-          colorCode: '#D6336C',
-          price: 4999,
-          quantity: 0, // out of stock in this colour
-          images: const [
-            VariantImage(
-              source: 'https://via.placeholder.com/600x800.png?text=Pink+1',
-              isPrimary: true,
-            ),
-          ],
-        ),
-      ],
-    ),
-    Saree(
-      id: 'saree_2',
-      name: 'Kanjivaram',
-      fabricName: 'Silk - Kanjivaram',
-      variants: const [
-        SareeVariant(
-          id: 'variant_2a',
-          colorName: 'Green',
-          colorCode: '#2E7D32',
-          price: 6499,
-          quantity: 12,
-          images: [
-            VariantImage(
-              source: 'https://via.placeholder.com/150',
-              isPrimary: true,
-            ),
-          ],
-        ),
-      ],
-    ),
-  ];
+  List<Saree> get _mockSarees => SareeRepository.instance.sarees;
 
   @override
   void initState() {
@@ -142,11 +68,15 @@ class _DashboardPageState extends State<DashboardPage> {
     // Rebuilds this page whenever the bottom nav's Search tab toggles
     // _searchVisible — that's what actually reveals/hides the panel below.
     _searchVisible.addListener(_onSearchVisibleChanged);
-    // Scans the initial saree list for any colour already at 0 stock (e.g.
-    // "Pink" below) and raises the bell alert + device notification for it.
-    // TODO: once _mockSarees is replaced by a real API call, call this
-    // again inside the same place the fetched list is set.
-    StockNotificationCenter.instance.syncFromSarees(_mockSarees);
+    // Rebuilds whenever a saree is added/edited/deleted anywhere in the
+    // app (e.g. this page's own handlers below, which now go through the
+    // repository instead of mutating a local list directly).
+    SareeRepository.instance.addListener(_onSareesChanged);
+  }
+
+  void _onSareesChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   void _onSearchVisibleChanged() {
@@ -157,6 +87,7 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void dispose() {
     _searchVisible.removeListener(_onSearchVisibleChanged);
+    SareeRepository.instance.removeListener(_onSareesChanged);
     // Only dispose the notifier if we created it ourselves — the shell-
     // provided one is owned (and disposed) by MainShell.
     if (widget.searchVisible == null) _searchVisible.dispose();
@@ -467,10 +398,10 @@ class _DashboardPageState extends State<DashboardPage> {
 
     if (created == null) return;
 
-    setState(() {
-      _mockSarees.insert(0, created);
-    });
-    StockNotificationCenter.instance.syncFromSarees(_mockSarees);
+    // Repository notifies listeners (including this page's own
+    // _onSareesChanged), which triggers the rebuild — no local setState
+    // needed here anymore.
+    SareeRepository.instance.addSaree(created);
   }
 
   void _onSareeTapped(Saree saree) {
@@ -491,11 +422,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
     if (updated == null) return;
 
-    setState(() {
-      final index = _mockSarees.indexWhere((s) => s.id == updated.id);
-      if (index != -1) _mockSarees[index] = updated;
-    });
-    StockNotificationCenter.instance.syncFromSarees(_mockSarees);
+    SareeRepository.instance.updateSaree(updated);
   }
 
   // TODO: shortcut into EditSareePage focused on adding just one new
@@ -536,12 +463,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
     if (confirmed != true) return;
 
-    setState(() {
-      // Remove by id, so only the exact saree that was tapped is removed —
-      // never the whole list.
-      _mockSarees.removeWhere((s) => s.id == saree.id);
-    });
-    StockNotificationCenter.instance.syncFromSarees(_mockSarees);
+    // Remove by id, so only the exact saree that was tapped is removed —
+    // never the whole list.
+    SareeRepository.instance.deleteSaree(saree.id);
   }
 }
 
